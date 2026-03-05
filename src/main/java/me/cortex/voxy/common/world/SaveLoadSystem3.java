@@ -5,6 +5,7 @@ import me.cortex.voxy.common.Logger;
 import me.cortex.voxy.common.util.MemoryBuffer;
 import me.cortex.voxy.common.util.ThreadLocalMemoryBuffer;
 import me.cortex.voxy.common.world.other.Mapper;
+import me.cortex.voxy.util.IntegerUtils;
 import org.lwjgl.system.MemoryUtil;
 
 public class SaveLoadSystem3 {
@@ -20,15 +21,15 @@ public class SaveLoadSystem3 {
         int x = i&0x1F;
         int y = (i>>10)&0x1F;
         int z = (i>>5)&0x1F;
-        return Integer.expand(x,0b1001001001001)|Integer.expand(y,0b10010010010010)|Integer.expand(z,0b100100100100100);
+        return IntegerUtils.expand(x,0b1001001001001)|IntegerUtils.expand(y,0b10010010010010)|IntegerUtils.expand(z,0b100100100100100);
 
         //zyxzyxzyxzyxzyx
     }
 
     public static int z2lin(int i) {
-        int x = Integer.compress(i, 0b1001001001001);
-        int y = Integer.compress(i, 0b10010010010010);
-        int z = Integer.compress(i, 0b100100100100100);
+        int x = IntegerUtils.compress(i, 0b1001001001001);
+        int y = IntegerUtils.compress(i, 0b10010010010010);
+        int z = IntegerUtils.compress(i, 0b100100100100100);
         return x|(y<<10)|(z<<5);
     }
 

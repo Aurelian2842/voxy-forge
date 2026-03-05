@@ -5,16 +5,18 @@ import me.cortex.voxy.client.core.model.bakery.BudgetBufferRenderer;
 import me.cortex.voxy.client.core.rendering.util.SharedIndexBuffer;
 import me.cortex.voxy.common.Logger;
 import me.cortex.voxy.commonImpl.VoxyCommon;
-import net.fabricmc.api.ClientModInitializer;
-import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
-import net.fabricmc.loader.api.FabricLoader;
 // import net.minecraft.client.gui.components.debug.DebugScreenEntries;
-import net.minecraft.resources.ResourceLocation;
-import java.util.HashSet;
-import java.util.function.Consumer;
-import java.util.function.Function;
+import net.minecraftforge.api.distmarker.Dist;
+import net.minecraftforge.client.event.RegisterClientCommandsEvent;
+import net.minecraftforge.event.TickEvent;
+import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.minecraftforge.fml.common.Mod;
+import net.minecraftforge.fml.event.lifecycle.FMLClientSetupEvent;
 
-public class VoxyClient implements ClientModInitializer {
+import java.util.HashSet;
+
+@Mod.EventBusSubscriber(modid = "voxy", bus = Mod.EventBusSubscriber.Bus.FORGE, value = Dist.CLIENT)
+public class VoxyClient {
     private static final HashSet<String> FREX = new HashSet<>();
 
     public static void initVoxyClient() {
@@ -37,22 +39,11 @@ public class VoxyClient implements ClientModInitializer {
         }
     }
 
-    @Override
-    public void onInitializeClient() {
-        // DebugScreenEntries.register(ResourceLocation.fromNamespaceAndPath("voxy","debug"), new VoxyDebugScreenEntry());
-        ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) -> {
-            if (VoxyCommon.isAvailable()) {
-                dispatcher.register(VoxyCommands.register());
-            }
-        });
-
-        FabricLoader.getInstance()
-                .getEntrypoints("frex_flawless_frames", Consumer.class)
-                .forEach(api -> ((Consumer<Function<String,Consumer<Boolean>>>)api).accept(name->active->{if (active) {
-                    FREX.add(name);
-                } else {
-                    FREX.remove(name);
-                }}));
+    @SubscribeEvent
+    public static void onClientCommandRegistration(RegisterClientCommandsEvent event) {
+        if (VoxyCommon.isAvailable()) {
+            event.getDispatcher().register(VoxyCommands.register());
+        }
     }
 
     public static boolean isFrexActive() {

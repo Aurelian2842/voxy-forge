@@ -19,7 +19,7 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-@Mixin(LevelRenderer.class)
+@Mixin(value = LevelRenderer.class, priority = 2147483647)
 public abstract class MixinLevelRenderer implements IGetVoxyRenderSystem {
     @Shadow private @Nullable ClientLevel level;
     @Unique private VoxyRenderSystem renderer;
@@ -29,7 +29,7 @@ public abstract class MixinLevelRenderer implements IGetVoxyRenderSystem {
         return this.renderer;
     }
 
-    @Inject(method = "allChanged()V", at = @At("RETURN"), order = 900)//We want to inject before sodium
+    @Inject(method = "allChanged()V", at = @At("RETURN"))//We want to inject before sodium
     private void reloadVoxyRenderer(CallbackInfo ci) {
         this.shutdownRenderer();
         if (this.level != null) {

@@ -3,8 +3,7 @@ package me.cortex.voxy.common.voxelization;
 import it.unimi.dsi.fastutil.objects.Reference2IntOpenHashMap;
 import me.cortex.voxy.common.world.other.Mapper;
 import me.cortex.voxy.common.world.other.Mipper;
-import me.jellysquid.mods.lithium.common.world.chunk.LithiumHashPalette;
-import net.fabricmc.loader.api.FabricLoader;
+import me.cortex.voxy.util.IntegerUtils;
 import net.minecraft.core.Holder;
 import net.minecraft.util.SimpleBitStorage;
 import net.minecraft.util.ZeroBitStorage;
@@ -20,8 +19,6 @@ import net.minecraft.world.level.chunk.SingleValuePalette;
 import java.util.WeakHashMap;
 
 public class WorldConversionFactory {
-    private static final boolean LITHIUM_INSTALLED = FabricLoader.getInstance().isModLoaded("lithium");
-
     private static final class Cache {
         private final int[] biomeCache = new int[4*4*4];
         private final WeakHashMap<Mapper, Reference2IntOpenHashMap<BlockState>> localMapping = new WeakHashMap<>();
@@ -40,25 +37,6 @@ public class WorldConversionFactory {
     //TODO: create a mapping for world/mapper -> local mapping
     private static final ThreadLocal<Cache> THREAD_LOCAL = ThreadLocal.withInitial(Cache::new);
 
-    private static boolean setupLithiumLocalPallet(Palette<BlockState> vp, Reference2IntOpenHashMap<BlockState> blockCache, Mapper mapper, int[] pc)  {
-        if (vp instanceof LithiumHashPalette<BlockState>) {
-            for (int i = 0; i < vp.getSize(); i++) {
-                BlockState state = null;
-                int blockId = -1;
-                try { state = vp.valueFor(i); } catch (Exception e) {}
-                if (state != null) {
-                    blockId = blockCache.getOrDefault(state, -1);
-                    if (blockId == -1) {
-                        blockId = mapper.getIdForBlockState(state);
-                        blockCache.put(state, blockId);
-                    }
-                }
-                pc[i] = blockId;
-            }
-            return true;
-        }
-        return false;
-    }
     private static void setupLocalPalette(Palette<BlockState> vp, Reference2IntOpenHashMap<BlockState> blockCache, Mapper mapper, int[] pc) {
         if (vp instanceof LinearPalette<BlockState>) {
             for (int i = 0; i < vp.getSize(); i++) {
@@ -102,10 +80,6 @@ public class WorldConversionFactory {
                 }
             }
             pc[0] = blockId;
-        } else {
-            if (!(LITHIUM_INSTALLED && setupLithiumLocalPallet(vp, blockCache, mapper, pc))) {
-                throw new IllegalStateException("Unknown palette type: " + vp);
-            }
         }
     }
 
@@ -172,7 +146,7 @@ public class WorldConversionFactory {
 
                 byte light = lightSupplier.supply(i&0xF, (i>>8)&0xF, (i>>4)&0xF);
                 nonZeroCnt += (bId != 0)?1:0;
-                data[i] = Mapper.composeMappingId(light, bId, biomes[Integer.compress(i,0b1100_1100_1100)]);
+                data[i] = Mapper.composeMappingId(light, bId, biomes[IntegerUtils.compress(i,0b1100_1100_1100)]);
             }
         } else {
             if (!(blockContainer.data.storage instanceof ZeroBitStorage)) {
@@ -187,7 +161,7 @@ public class WorldConversionFactory {
                 nonZeroCnt = 4096;
                 for (int i = 0; i <= 0xFFF; i++) {
                     byte light = lightSupplier.supply(i&0xF, (i>>8)&0xF, (i>>4)&0xF);
-                    data[i] = Mapper.composeMappingId(light, bId, biomes[Integer.compress(i,0b1100_1100_1100)]);
+                    data[i] = Mapper.composeMappingId(light, bId, biomes[IntegerUtils.compress(i,0b1100_1100_1100)]);
                 }
             }
         }

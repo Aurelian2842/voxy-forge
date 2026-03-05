@@ -5,17 +5,16 @@ import com.google.gson.reflect.TypeToken;
 import com.google.gson.stream.JsonReader;
 import com.google.gson.stream.JsonWriter;
 import me.cortex.voxy.common.Logger;
-import net.fabricmc.loader.api.FabricLoader;
+import net.minecraftforge.fml.ModList;
 
-import java.io.BufferedReader;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
+import java.io.*;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
+import java.util.jar.JarEntry;
+import java.util.jar.JarFile;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -95,7 +94,8 @@ public class Serialization {
         Map<Class<?>, GsonConfigSerialization<?>> serializers = new HashMap<>();
 
         Set<String> clazzs = new LinkedHashSet<>();
-        var path = FabricLoader.getInstance().getModContainer("voxy").get().getRootPaths().get(0);
+        var path = ModList.get().getModContainerById("voxy").get()
+                .getModInfo().getOwningFile().getFile().getFilePath();
         clazzs.addAll(collectAllClasses(path, BASE_SEARCH_PACKAGE));
         clazzs.addAll(collectAllClasses(BASE_SEARCH_PACKAGE));
         int count = 0;
@@ -162,24 +162,32 @@ public class Serialization {
         Logger.info("Registered " + count + " config types");
     }
 
-    private static List<String> collectAllClasses(String pack) {
-        try {
-            InputStream stream = Serialization.class.getClassLoader()
-                    .getResourceAsStream(pack.replaceAll("[.]", "/"));
-            BufferedReader reader = new BufferedReader(new InputStreamReader(stream));
-            return reader.lines().flatMap(inner -> {
-                if (inner.endsWith(".class")) {
-                    return Stream.of(pack + "." + inner.replace(".class", ""));
-                } else if (!inner.contains(".")) {
-                    return collectAllClasses(pack + "." + inner).stream();
-                } else {
-                    return Stream.of();
+    private static Set<String> collectAllClasses(String basePackage) {
+        Set<String> classes = new LinkedHashSet<>();
+        File jarFile = new File(ModList.get().getModContainerById("voxy").get()
+                .getModInfo().getOwningFile().getFile().getFilePath().toString());
+
+        try (JarFile jar = new JarFile(jarFile)) {
+            String pathPrefix = basePackage.replace('.', '/');
+
+            // 遍历 JAR 包里的所有条目
+            var entries = jar.entries();
+            while (entries.hasMoreElements()) {
+                JarEntry entry = entries.nextElement();
+                String name = entry.getName();
+
+                // 过滤：必须在目标包下，且是 .class 文件
+                if (name.startsWith(pathPrefix) && name.endsWith(".class")) {
+                    // 转换为类名格式: me/cortex/voxy/MyConfig.class -> me.cortex.voxy.MyConfig
+                    String className = name.replace('/', '.')
+                            .replace(".class", "");
+                    classes.add(className);
                 }
-            }).collect(Collectors.toList());
-        } catch (Exception e) {
-            Logger.error("Failed to collect classes in package: " + pack, e);
-            return List.of();
+            }
+        } catch (IOException e) {
+            Logger.error("Failed to scan JAR", e);
         }
+        return classes;
     }
     private static List<String> collectAllClasses(Path base, String pack) {
         if (!Files.exists(base.resolve(pack.replaceAll("[.]", "/")))) {

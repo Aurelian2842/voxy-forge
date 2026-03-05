@@ -22,11 +22,11 @@ import com.mojang.blaze3d.vertex.PoseStack;
 
 import static org.lwjgl.opengl.GL11C.glViewport;
 
-@Mixin(LevelRenderer.class)
+@Mixin(value = LevelRenderer.class, priority = 2000)
 public class MixinLevelRenderer {
     @Shadow @Final private Minecraft minecraft;
 
-    @Inject(method = "renderLevel", at = @At("HEAD"), order = 100)
+    @Inject(method = "renderLevel", at = @At("HEAD"))
     private void voxy$injectIrisCompat(
             PoseStack matrices,
             float tickDelta,

@@ -11,6 +11,7 @@ import me.cortex.voxy.common.world.WorldUpdater;
 import me.cortex.voxy.common.world.other.Mapper;
 import me.cortex.voxy.commonImpl.importers.IDataImporter.ICompletionCallback;
 import me.cortex.voxy.commonImpl.importers.IDataImporter.IUpdateCallback;
+import me.cortex.voxy.util.IntegerUtils;
 import net.minecraft.core.Holder;
 import net.minecraft.core.Registry;
 import net.minecraft.core.registries.Registries;
@@ -283,8 +284,8 @@ public class DHImporter implements IDataImporter {
         byte[] col = ctx.colScratch;
         for (int x = 0; x < 64; x++) {
             for (int z = 0; z < 64; z++) {
-                int bPos = Integer.expand(x&0xF, 0b00_00_0000_0000_1111) |
-                           Integer.expand(z, 0b00_11_0000_1111_0000);
+                int bPos = IntegerUtils.expand(x&0xF, 0b00_00_0000_0000_1111) |
+                           IntegerUtils.expand(z, 0b00_11_0000_1111_0000);
                 short cl = stream.readShort();
                 if (cl < 0) {
                     throw new IllegalStateException();
@@ -300,8 +301,8 @@ public class DHImporter implements IDataImporter {
                     //    int a = 0;
                     //}
                     //Insert all entries into data cache
-                    startY = Integer.expand(startY, 0b11111111_00_1111_0000_0000);
-                    endY = Integer.expand(endY, 0b11111111_00_1111_0000_0000);
+                    startY = IntegerUtils.expand(startY, 0b11111111_00_1111_0000_0000);
+                    endY = IntegerUtils.expand(endY, 0b11111111_00_1111_0000_0000);
                     final int Msk = 0b11111111_00_1111_0000_0000;
                     final int iMsk1 = (~Msk)+1;
                     for (int y = startY; y != endY; y = (y+iMsk1)&Msk) {
