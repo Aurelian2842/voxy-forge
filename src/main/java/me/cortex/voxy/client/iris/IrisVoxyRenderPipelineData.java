@@ -611,10 +611,21 @@ public class IrisVoxyRenderPipelineData {
             for (int j = 0; j < samplers.length; j++) {
                 int unit = j+base;
                 var ts = samplers[j];
-                glBindTextureUnit(unit, ts.texture.getAsInt());
+                int tex = 0;
+                try {
+                    tex = ts.texture.getAsInt();
+                } catch (RuntimeException e) {
+                    tex = 0;
+                }
+                if (tex == 0 || !org.lwjgl.opengl.GL11.glIsTexture(tex)) {
+                    glBindTextureUnit(unit, 0);
+                    glBindSampler(unit, 0);
+                    continue;
+                }
+                glBindTextureUnit(unit, tex);
                 if (ts.sampler != -1) {
                     glBindSampler(unit, ts.sampler);
-                }//TODO: might need to bind sampler 0
+                }
             }
         };
         return new ImageSet(builder.toString(), bindingFunction);

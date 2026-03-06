@@ -273,7 +273,9 @@ dependencies {
     implementation(jarJar('org.lz4:lz4-java:1.8.0')) {
         jarJar.ranged(it, "[1.8.0,)")
     }
-    compileOnly('org.tukaani:xz:1.10')
+    implementation(jarJar('org.tukaani:xz:1.10')) {
+        jarJar.ranged(it, "[1.10,)")
+    }
 
     implementation(jarJar('org.xerial:sqlite-jdbc:3.49.1.0')) {
         jarJar.ranged(it, "[3.49.1.0,)")
