@@ -1,3 +1,5 @@
+import java.nio.file.Files
+
 plugins {
     id 'net.minecraftforge.gradle' version '[6.0,6.2)'
     id 'maven-publish'
@@ -11,6 +13,10 @@ group = project.maven_group
 
 base {
     archivesName = project.archives_base_name
+}
+
+configurations {
+    shadow
 }
 
 repositories {
@@ -190,8 +196,12 @@ dependencies {
     implementation platform("org.lwjgl:lwjgl-bom:3.3.1")
 
     implementation "org.lwjgl:lwjgl"
-    implementation "org.lwjgl:lwjgl-lmdb"
-    implementation "org.lwjgl:lwjgl-zstd"
+    implementation(jarJar("org.lwjgl:lwjgl-zstd:3.3.1")) {
+        jarJar.ranged(it, "[3.3.1,)")
+    }
+    implementation(jarJar("org.lwjgl:lwjgl-lmdb:3.3.1")) {
+        jarJar.ranged(it, "[3.3.1,)")
+    }
 
     runtimeOnly "org.lwjgl:lwjgl:3.3.1:natives-windows"
     runtimeOnly "org.lwjgl:lwjgl:3.3.1:natives-linux"
@@ -224,6 +234,66 @@ dependencies {
     }
 }
 
+tasks.register("embedNatives", Copy) {
+    from(configurations.runtimeClasspath) {
+        include("**/lwjgl-lmdb-*natives*.jar")
+        include("**/lwjgl-zstd-*natives*.jar")
+    }
+    into("$buildDir/libs/natives")
+}
+
+tasks.register("patchJarJarManifest") {
+    dependsOn tasks.named('jarJar')
+
+    doLast {
+        def jarFile = tasks.named('jarJar').get().outputs.files.singleFile
+
+        def fs = java.nio.file.FileSystems.newFileSystem(jarFile.toPath(), (ClassLoader) null)
+        try {
+            def metadataPath = fs.getPath("META-INF/jarjar/metadata.json")
+            def slurper = new groovy.json.JsonSlurper()
+            def metadata = slurper.parse(Files.readAllBytes(metadataPath), "UTF-8")
+            def nativesDir = file("$buildDir/libs/natives")
+            nativesDir.listFiles()?.findAll { it.name.endsWith(".jar") }?.each { nativeJar ->
+                def matcher = (nativeJar.name =~ /^(.+)-(\d+\.\d+[\.\d]*)-natives(.*)\.jar$/)
+                if (matcher.matches()) {
+                    def artifactId = matcher[0][1]
+                    def version    = matcher[0][2]
+                    def classifier = matcher[0][3]
+
+                    def entry = [
+                            identifier: [
+                                    group  : "org.lwjgl",
+                                    artifact: artifactId + classifier
+                            ],
+                            version: [
+                                    range  : "[${version},)",
+                                    artifactVersion: version
+                            ],
+                            path: "META-INF/jarjar/${nativeJar.name}",
+                            isObfuscated: false
+                    ]
+                    metadata.jars << entry
+                }
+            }
+            def json = groovy.json.JsonOutput.prettyPrint(
+                    groovy.json.JsonOutput.toJson(metadata)
+            )
+            Files.write(metadataPath, json.getBytes("UTF-8"))
+        } finally {
+            fs.close()
+        }
+    }
+}
+
+tasks.named('jarJar') {
+    dependsOn tasks.named('embedNatives')
+    from("$buildDir/libs/natives") {
+        into 'META-INF/jarjar'
+    }
+    finalizedBy tasks.named('patchJarJarManifest')
+}
+
 def targetJavaVersion = 17
 tasks.withType(JavaCompile).configureEach {
     it.options.encoding = "UTF-8"
@@ -249,7 +319,7 @@ tasks.named('jar', Jar).configure {
     finalizedBy 'reobfJar'
 
     from("LICENSE") {
-        rename { "${it}_${project.archives_base_name}"}
+        rename { "${it}_${project.archives_base_name}" }
     }
 }
 
