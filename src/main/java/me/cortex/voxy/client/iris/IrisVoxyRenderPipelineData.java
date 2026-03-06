@@ -28,6 +28,7 @@ import net.irisshaders.iris.uniforms.custom.cached.*;
 import org.joml.*;
 import org.lwjgl.system.MemoryUtil;
 
+import java.lang.reflect.Method;
 import java.util.*;
 import java.util.function.*;
 import java.util.stream.Collectors;
@@ -326,6 +327,21 @@ public class IrisVoxyRenderPipelineData {
                 return this;
             }
 
+            @Override
+            public DynamicLocationalUniformHolder uniform2f(UniformUpdateFrequency updateFrequency, String name, Supplier<Vector2f> value) {
+                return this.uniform2f(name, value, null);
+            }
+
+            @Override
+            public DynamicLocationalUniformHolder uniform2f(String name, Supplier<Vector2f> value, ValueUpdateNotifier notifier) {
+                this.injectDynamicUniformType(name, UniformType.VEC2, offset->{
+                    return ptr->{
+                        value.get().getToAddress(ptr+offset);
+                    };
+                });
+                return this;
+            }
+
 
             @Override
             public DynamicLocationalUniformHolder uniform3f(UniformUpdateFrequency updateFrequency, String name, Supplier<Vector3f> value) {
@@ -342,12 +358,60 @@ public class IrisVoxyRenderPipelineData {
                 return this;
             }
 
+            public DynamicLocationalUniformHolder uniform3f(UniformUpdateFrequency updateFrequency, String name, FloatSupplier x, FloatSupplier y, FloatSupplier z) {
+                this.injectDynamicUniformType(name, UniformType.VEC3, offset->{
+                    return ptr->{
+                        MemoryUtil.memPutFloat(ptr+offset, x.getAsFloat());
+                        MemoryUtil.memPutFloat(ptr+offset+4, y.getAsFloat());
+                        MemoryUtil.memPutFloat(ptr+offset+8, z.getAsFloat());
+                    };
+                });
+                return this;
+            }
+
+            @Override
+            public DynamicLocationalUniformHolder uniform4f(UniformUpdateFrequency updateFrequency, String name, Supplier<Vector4f> value) {
+                return this.uniform4f(name, value, null);
+            }
+
+            @Override
+            public DynamicLocationalUniformHolder uniform4f(String name, Supplier<Vector4f> value, ValueUpdateNotifier notifier) {
+                this.injectDynamicUniformType(name, UniformType.VEC4, offset->{
+                    return ptr->{
+                        value.get().getToAddress(ptr+offset);
+                    };
+                });
+                return this;
+            }
+
+
+            @Override
+            public DynamicLocationalUniformHolder uniformMatrix(UniformUpdateFrequency updateFrequency, String name, Supplier<Matrix4f> value) {
+                this.injectDynamicUniformType(name, UniformType.MAT4, offset->{
+                    return ptr->{
+                        value.get().getToAddress(ptr+offset);
+                    };
+                });
+                return this;
+            }
+
+            @Override
+            public DynamicLocationalUniformHolder uniformMatrix(String name, Supplier<Matrix4f> value, ValueUpdateNotifier notifier) {
+                this.injectDynamicUniformType(name, UniformType.MAT4, offset->{
+                    return ptr->{
+                        value.get().getToAddress(ptr+offset);
+                    };
+                });
+                return this;
+            }
+
             private void injectDynamicUniformType(String name, UniformType type, Long2ObjectFunction<LongConsumer> supplier) {
                 var names = patch.getUniformList();
                 for (int i = 0; i < names.length; i++) {
                     if (names[i].equals(name)) {
                         if (!seenUniforms.add(name)) {
-                            throw new IllegalArgumentException("Already added uniform: " + name);
+                            //throw new IllegalArgumentException("Already added uniform: " + name);
+                            return;
                         }
                         uniforms.add(new UniformWritingHolder(name, type, supplier));
                         break;
@@ -357,13 +421,49 @@ public class IrisVoxyRenderPipelineData {
 
             @Override
             public DynamicLocationalUniformHolder addDynamicUniform(Uniform uniform, ValueUpdateNotifier valueUpdateNotifier) {
-                throw new IllegalStateException("Type not implemented for uniform: " + uniform);
-                //return this;
+                try {
+                    String name = null;
+                    Method getName = null;
+                    try { getName = uniform.getClass().getMethod("getName"); } catch (Exception e) {}
+                    if (getName == null) try { getName = uniform.getClass().getMethod("getUniformName"); } catch (Exception e) {}
+                    if (getName != null) name = (String) getName.invoke(uniform);
+                    if (name == null) return this;
+
+                    Object typeObj = null;
+                    Method getType = null;
+                    try { getType = uniform.getClass().getMethod("getType"); } catch (Exception e) {}
+                    if (getType == null) try { getType = uniform.getClass().getMethod("getUniformType"); } catch (Exception e) {}
+                    if (getType != null) typeObj = getType.invoke(uniform);
+                    if (typeObj == null) return this;
+
+                    final String finalName = name;
+                    final net.irisshaders.iris.gl.uniform.UniformType type = (net.irisshaders.iris.gl.uniform.UniformType) typeObj;
+
+                    this.injectDynamicUniformType(finalName, type, offset -> {
+                        FunctionReturn cachedReturn = new FunctionReturn();
+                        return ptr -> {
+                            try {
+                                Method writeTo = null;
+                                try { writeTo = uniform.getClass().getMethod("writeTo", FunctionReturn.class); } catch (Exception e) {}
+                                if (writeTo != null) {
+                                    writeTo.invoke(uniform, cachedReturn);
+                                    if (type == UniformType.INT) MemoryUtil.memPutInt(ptr + offset, cachedReturn.intReturn);
+                                    else if (type == UniformType.FLOAT) MemoryUtil.memPutFloat(ptr + offset, cachedReturn.floatReturn);
+                                    else if (type == UniformType.VEC2) ((Vector2f)cachedReturn.objectReturn).getToAddress(ptr + offset);
+                                    else if (type == UniformType.VEC3) ((Vector3f)cachedReturn.objectReturn).getToAddress(ptr + offset);
+                                    else if (type == UniformType.VEC4) ((Vector4f)cachedReturn.objectReturn).getToAddress(ptr + offset);
+                                    else if (type == UniformType.MAT4) ((Matrix4f)cachedReturn.objectReturn).getToAddress(ptr + offset);
+                                }
+                            } catch (Exception e) {}
+                        };
+                    });
+                } catch (Exception e) {}
+                return this;
             }
 
             @Override
             public LocationalUniformHolder addUniform(UniformUpdateFrequency uniformUpdateFrequency, Uniform uniform) {
-                return this;
+                return this.addDynamicUniform(uniform, null);
             }
 
             @Override
@@ -384,16 +484,28 @@ public class IrisVoxyRenderPipelineData {
             }
         };
         CommonUniforms.addDynamicUniforms(uniformBuilder, FogMode.PER_FRAGMENT);
+        CommonUniforms.addDynamicUniforms(uniformBuilder, FogMode.PER_VERTEX);
+        VoxyUniforms.addUniforms(uniformBuilder);
+
+        // Fallback for endFlashIntensity, screenBrightness, skyColor if they are still missing
+        uniformBuilder.uniform1f(UniformUpdateFrequency.PER_FRAME, "endFlashIntensity", () -> 0.0f);
+        uniformBuilder.uniform1f(UniformUpdateFrequency.PER_FRAME, "screenBrightness", () -> 1.0f);
+        uniformBuilder.uniform3f(UniformUpdateFrequency.PER_FRAME, "skyColor", () -> new Vector3f(0.5f, 0.7f, 1.0f));
+
         cu.assignTo(uniformBuilder);
         cu.mapholderToPass(uniformBuilder, patch);
 
         FunctionReturn cachedReturn = new FunctionReturn();
-        ((CustomUniformsAccessor)cu).getLocationMap().get(patch).object2IntEntrySet().forEach(entry-> {
-            if (!seenUniforms.add(entry.getKey().getName())) {
-                throw new IllegalArgumentException("Already added uniform: " + entry.getKey().getName());
-            }
-            uniforms.add(new UniformWritingHolder(entry.getKey().getName(), Type.convert(entry.getKey().getType()),offset->createWriter(offset, cachedReturn, entry.getKey())));
-        });
+        var customLocMap = ((CustomUniformsAccessor)cu).getLocationMap();
+        if (customLocMap != null && customLocMap.containsKey(patch)) {
+            customLocMap.get(patch).object2IntEntrySet().forEach(entry-> {
+                if (!seenUniforms.add(entry.getKey().getName())) {
+                    //throw new IllegalArgumentException("Already added uniform: " + entry.getKey().getName());
+                    return;
+                }
+                uniforms.add(new UniformWritingHolder(entry.getKey().getName(), Type.convert(entry.getKey().getType()),offset->createWriter(offset, cachedReturn, entry.getKey())));
+            });
+        }
 
         if (uniforms.size() != patch.getUniformList().length) {
             Set<String> uniformsUnseen = new HashSet<>(List.of(patch.getUniformList()));
